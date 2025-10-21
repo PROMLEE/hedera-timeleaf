@@ -1,0 +1,9 @@
+server:
+  port: 8080
+spring:
+  thymeleaf:
+    cache: false
+app:
+  hedera:
+    network: testnet
+    # 환경변수로 덮어쓰기 가능: HEDERA_ACCOUNT_ID / HEDERA_PRIVATE_KEY

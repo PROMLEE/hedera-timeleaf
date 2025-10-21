@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Hedera 통신 데모 - 전체 기능</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          Oxygen, Ubuntu, Cantarell, "Helvetica Neue", Arial,
+          "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+        margin: 0;
+        padding: 2rem;
+        background: #f9fafb;
+      }
+      .container {
+        max-width: 1200px;
+        margin: auto;
+      }
+      h1 {
+        color: #111827;
+      }
+      h2 {
+        color: #374151;
+        font-size: 1.25rem;
+        margin-top: 0;
+      }
+      .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 2rem;
+      }
+      .badge {
+        display: inline-block;
+        background: #dbeafe;
+        color: #1e40af;
+        padding: 6px 12px;
+        border-radius: 999px;
+        font-size: 14px;
+        margin-right: 8px;
+      }
+      .badge.success {
+        background: #d1fae5;
+        color: #065f46;
+      }
+      .badge.warning {
+        background: #fef3c7;
+        color: #92400e;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+        gap: 1.5rem;
+        margin-bottom: 2rem;
+      }
+      .card {
+        background: white;
+        border: 1px solid #e5e7eb;
+        border-radius: 12px;
+        padding: 1.5rem;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      }
+      .card.disabled {
+        opacity: 0.6;
+        pointer-events: none;
+      }
+      label {
+        display: block;
+        color: #374151;
+        font-size: 14px;
+        font-weight: 500;
+        margin-bottom: 6px;
+      }
+      input[type="text"],
+      input[type="number"] {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid #d1d5db;
+        border-radius: 6px;
+        font-size: 14px;
+        box-sizing: border-box;
+        margin-bottom: 12px;
+      }
+      input:focus {
+        outline: none;
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+      }
+      button {
+        width: 100%;
+        padding: 10px 16px;
+        border: 0;
+        background: #3b82f6;
+        color: white;
+        border-radius: 6px;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background 0.2s;
+      }
+      button:hover {
+        background: #2563eb;
+      }
+      button:disabled {
+        background: #9ca3af;
+        cursor: not-allowed;
+      }
+      .error {
+        background: #fee2e2;
+        color: #991b1b;
+        padding: 12px;
+        border-radius: 6px;
+        margin-top: 12px;
+        font-size: 14px;
+      }
+      .result {
+        background: #d1fae5;
+        color: #065f46;
+        padding: 12px;
+        border-radius: 6px;
+        margin-top: 12px;
+        font-size: 14px;
+        white-space: pre-wrap;
+        word-break: break-all;
+      }
+      .info-box {
+        background: #fef3c7;
+        color: #92400e;
+        padding: 16px;
+        border-radius: 8px;
+        margin-bottom: 2rem;
+        font-size: 14px;
+      }
+      .section-title {
+        font-size: 1.5rem;
+        font-weight: 600;
+        color: #111827;
+        margin: 2rem 0 1rem 0;
+        padding-bottom: 0.5rem;
+        border-bottom: 2px solid #e5e7eb;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h1>🌐 Hedera 통신 데모</h1>
+        <div>
+          <span class="badge" th:text="'Network: ' + ${network}"></span>
+          <span
+            th:classappend="${hasOperator} ? 'success' : 'warning'"
+            class="badge"
+            th:text="${hasOperator} ? '✓ 운영자 설정됨' : '⚠ 운영자 미설정'"
+          >
+          </span>
+        </div>
+      </div>
+
+      <div th:if="${!hasOperator}" class="info-box">
+        <strong>⚠️ 운영자 계정이 설정되지 않았습니다</strong><br />
+        환경변수 <code>HEDERA_ACCOUNT_ID</code>와
+        <code>HEDERA_PRIVATE_KEY</code>를 설정하면 트랜잭션 기능(전송, 계정
+        생성, 토큰 생성 등)을 사용할 수 있습니다. 현재는 조회(Query) 기능만 사용
+        가능합니다.
+      </div>
+
+      <!-- 결과/에러 메시지 -->
+      <div th:if="${error}" class="card">
+        <div class="error" th:text="${error}"></div>
+      </div>
+      <div th:if="${result}" class="card">
+        <div class="result" th:text="${result}"></div>
+      </div>
+
+      <!-- 조회 기능 (Query) -->
+      <div class="section-title">📊 조회 기능 (Query)</div>
+      <div class="grid">
+        <div class="card">
+          <h2>계정 잔액 조회</h2>
+          <form
+            th:action="@{/query-balance}"
+            th:object="${balanceForm}"
+            method="post"
+          >
+            <label>계정 ID</label>
+            <input type="text" th:field="*{accountId}" placeholder="0.0.1234" />
+            <button type="submit">잔액 조회</button>
+          </form>
+        </div>
+
+        <div class="card">
+          <h2>계정 정보 조회</h2>
+          <form action="/query-info" method="post">
+            <label>계정 ID</label>
+            <input
+              type="text"
+              name="accountId"
+              placeholder="0.0.1234"
+              required
+            />
+            <button type="submit">정보 조회</button>
+          </form>
+        </div>
+      </div>
+
+      <!-- 계정 & 전송 -->
+      <div class="section-title">💰 계정 & HBAR 전송</div>
+      <div class="grid">
+        <div class="card" th:classappend="${!hasOperator} ? 'disabled'">
+          <h2>HBAR 전송</h2>
+          <form
+            th:action="@{/transfer}"
+            th:object="${transferForm}"
+            method="post"
+          >
+            <label>받는 계정 ID</label>
+            <input
+              type="text"
+              th:field="*{toAccountId}"
+              placeholder="0.0.1234"
+            />
+            <label>전송할 금액 (tinybars)</label>
+            <input type="number" th:field="*{amount}" placeholder="100000000" />
+            <small style="color: #6b7280">1 HBAR = 100,000,000 tinybars</small>
+            <button type="submit" th:disabled="${!hasOperator}">전송</button>
+          </form>
+        </div>
+
+        <div class="card" th:classappend="${!hasOperator} ? 'disabled'">
+          <h2>새 계정 생성</h2>
+          <form
+            th:action="@{/create-account}"
+            th:object="${accountForm}"
+            method="post"
+          >
+            <label>초기 잔액 (tinybars)</label>
+            <input
+              type="number"
+              th:field="*{initialBalance}"
+              placeholder="100000000"
+            />
+            <small style="color: #6b7280"
+              >생성된 계정의 Private Key가 반환됩니다</small
+            >
+            <button type="submit" th:disabled="${!hasOperator}">
+              계정 생성
+            </button>
+          </form>
+        </div>
+      </div>
+
+      <!-- 토큰 -->
+      <div class="section-title">🪙 토큰 (Fungible Token)</div>
+      <div class="grid">
+        <div class="card" th:classappend="${!hasOperator} ? 'disabled'">
+          <h2>토큰 생성</h2>
+          <form
+            th:action="@{/create-token}"
+            th:object="${tokenForm}"
+            method="post"
+          >
+            <label>토큰 이름</label>
+            <input type="text" th:field="*{name}" placeholder="My Token" />
+            <label>토큰 심볼</label>
+            <input type="text" th:field="*{symbol}" placeholder="MTK" />
+            <label>발행량</label>
+            <input
+              type="number"
+              th:field="*{initialSupply}"
+              placeholder="1000000"
+            />
+            <label>소수점 자리수</label>
+            <input type="number" th:field="*{decimals}" placeholder="2" />
+            <button type="submit" th:disabled="${!hasOperator}">
+              토큰 생성
+            </button>
+          </form>
+        </div>
+      </div>
+
+      <!-- NFT -->
+      <div class="section-title">🎨 NFT (Non-Fungible Token)</div>
+      <div class="grid">
+        <div class="card" th:classappend="${!hasOperator} ? 'disabled'">
+          <h2>NFT 컬렉션 생성</h2>
+          <form th:action="@{/create-nft}" th:object="${nftForm}" method="post">
+            <label>NFT 이름</label>
+            <input
+              type="text"
+              th:field="*{name}"
+              placeholder="My NFT Collection"
+            />
+            <label>NFT 심볼</label>
+            <input type="text" th:field="*{symbol}" placeholder="MNFT" />
+            <button type="submit" th:disabled="${!hasOperator}">
+              NFT 컬렉션 생성
+            </button>
+          </form>
+        </div>
+
+        <div class="card" th:classappend="${!hasOperator} ? 'disabled'">
+          <h2>NFT 민팅</h2>
+          <form
+            th:action="@{/mint-nft}"
+            th:object="${nftMintForm}"
+            method="post"
+          >
+            <label>토큰 ID</label>
+            <input type="text" th:field="*{tokenId}" placeholder="0.0.1234" />
+            <label>메타데이터</label>
+            <input
+              type="text"
+              th:field="*{metadata}"
+              placeholder="ipfs://..."
+            />
+            <button type="submit" th:disabled="${!hasOperator}">
+              NFT 민팅
+            </button>
+          </form>
+        </div>
+      </div>
+
+      <!-- HCS (Hedera Consensus Service) -->
+      <div class="section-title">💬 HCS (Hedera Consensus Service)</div>
+      <div class="grid">
+        <div class="card" th:classappend="${!hasOperator} ? 'disabled'">
+          <h2>토픽 생성</h2>
+          <form
+            th:action="@{/create-topic}"
+            th:object="${topicForm}"
+            method="post"
+          >
+            <label>토픽 메모</label>
+            <input type="text" th:field="*{memo}" placeholder="My Topic" />
+            <button type="submit" th:disabled="${!hasOperator}">
+              토픽 생성
+            </button>
+          </form>
+        </div>
+
+        <div class="card" th:classappend="${!hasOperator} ? 'disabled'">
+          <h2>메시지 전송</h2>
+          <form
+            th:action="@{/submit-message}"
+            th:object="${messageForm}"
+            method="post"
+          >
+            <label>토픽 ID</label>
+            <input type="text" th:field="*{topicId}" placeholder="0.0.1234" />
+            <label>메시지</label>
+            <input
+              type="text"
+              th:field="*{message}"
+              placeholder="Hello Hedera!"
+            />
+            <button type="submit" th:disabled="${!hasOperator}">
+              메시지 전송
+            </button>
+          </form>
+        </div>
+      </div>
+
+      <p
+        style="
+          color: #6b7280;
+          margin-top: 3rem;
+          font-size: 14px;
+          text-align: center;
+        "
+      >
+        Hedera Testnet 데모 | Spring Boot + Thymeleaf + Hedera SDK
+      </p>
+    </div>
+  </body>
+</html>
