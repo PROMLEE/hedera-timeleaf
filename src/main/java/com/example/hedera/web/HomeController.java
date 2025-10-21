@@ -11,8 +11,9 @@ import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
-import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.Valid;
 
 @Controller
@@ -46,7 +47,9 @@ public class HomeController {
       @NotBlank(message = "메타데이터를 입력하세요") String metadata) {
   }
 
-  record TopicForm(@NotBlank(message = "메모를 입력하세요") String memo) {
+  record TopicForm(
+      @NotBlank(message = "메모를 입력하세요") String memo,
+      @Min(value = 1800, message = "자동 갱신 기간은 최소 1800초 (30분) 이상이어야 합니다") @Max(value = 7776000, message = "자동 갱신 기간은 최대 7,776,000초 (90일) 이하로 설정해야 합니다") long autoRenewPeriodSeconds) {
   }
 
   record MessageForm(
@@ -69,8 +72,20 @@ public class HomeController {
     model.addAttribute("tokenForm", new TokenForm("", "", 1000000L, 2));
     model.addAttribute("nftForm", new NFTForm("", ""));
     model.addAttribute("nftMintForm", new NFTMintForm("", ""));
-    model.addAttribute("topicForm", new TopicForm(""));
+    model.addAttribute("topicForm", new TopicForm("", 7776000L));
     model.addAttribute("messageForm", new MessageForm("", ""));
+
+    // Operator 정보 추가
+    if (hederaService.hasOperator()) {
+      try {
+        AccountInfo operatorInfo = hederaService.getOperatorInfo();
+        model.addAttribute("operatorInfo", operatorInfo);
+        model.addAttribute("operatorAccountId", hederaService.getOperatorAccountId());
+      } catch (Exception e) {
+        // Operator 정보 조회 실패는 무시
+      }
+    }
+
     return "index";
   }
 
@@ -83,23 +98,27 @@ public class HomeController {
     }
     try {
       AccountBalance balance = hederaService.getAccountBalance(form.accountId());
+      model.addAttribute("resultKey", "balance");
       model.addAttribute("result",
           String.format("%s 의 hbars: %s, tokens: %s", form.accountId(), balance.hbars, balance.tokens));
     } catch (Exception e) {
+      model.addAttribute("resultKey", "balance");
       model.addAttribute("error", e.getMessage());
     }
     return "index";
   }
 
   @PostMapping("/query-info")
-  public String queryInfo(@RequestParam String accountId, Model model) {
+  public String queryInfo(@RequestParam("accountId") String accountId, Model model) {
     addAllFormAttributes(model);
     try {
       AccountInfo info = hederaService.getAccountInfo(accountId);
+      model.addAttribute("resultKey", "info");
       model.addAttribute("result",
           String.format("계정 정보:%nAccount ID: %s%nKey: %s%nBalance: %s%nMemo: %s",
               info.accountId, info.key, info.balance, info.accountMemo));
     } catch (Exception e) {
+      model.addAttribute("resultKey", "info");
       model.addAttribute("error", e.getMessage());
     }
     return "index";
@@ -114,8 +133,10 @@ public class HomeController {
     }
     try {
       String result = hederaService.transferHbar(form.toAccountId(), form.amount());
+      model.addAttribute("resultKey", "transfer");
       model.addAttribute("result", result);
     } catch (Exception e) {
+      model.addAttribute("resultKey", "transfer");
       model.addAttribute("error", e.getMessage());
     }
     return "index";
@@ -130,8 +151,10 @@ public class HomeController {
     }
     try {
       String result = hederaService.createAccount(form.initialBalance());
+      model.addAttribute("resultKey", "account");
       model.addAttribute("result", result);
     } catch (Exception e) {
+      model.addAttribute("resultKey", "account");
       model.addAttribute("error", e.getMessage());
     }
     return "index";
@@ -147,8 +170,10 @@ public class HomeController {
     try {
       String result = hederaService.createToken(form.name(), form.symbol(),
           form.initialSupply(), form.decimals());
+      model.addAttribute("resultKey", "token");
       model.addAttribute("result", result);
     } catch (Exception e) {
+      model.addAttribute("resultKey", "token");
       model.addAttribute("error", e.getMessage());
     }
     return "index";
@@ -163,8 +188,10 @@ public class HomeController {
     }
     try {
       String result = hederaService.createNFT(form.name(), form.symbol());
+      model.addAttribute("resultKey", "nft");
       model.addAttribute("result", result);
     } catch (Exception e) {
+      model.addAttribute("resultKey", "nft");
       model.addAttribute("error", e.getMessage());
     }
     return "index";
@@ -179,8 +206,10 @@ public class HomeController {
     }
     try {
       String result = hederaService.mintNFT(form.tokenId(), form.metadata().getBytes());
+      model.addAttribute("resultKey", "mint");
       model.addAttribute("result", result);
     } catch (Exception e) {
+      model.addAttribute("resultKey", "mint");
       model.addAttribute("error", e.getMessage());
     }
     return "index";
@@ -194,9 +223,11 @@ public class HomeController {
       return "index";
     }
     try {
-      String result = hederaService.createTopic(form.memo());
+      String result = hederaService.createTopic(form.memo(), form.autoRenewPeriodSeconds());
+      model.addAttribute("resultKey", "topic");
       model.addAttribute("result", result);
     } catch (Exception e) {
+      model.addAttribute("resultKey", "topic");
       model.addAttribute("error", e.getMessage());
     }
     return "index";
@@ -211,8 +242,10 @@ public class HomeController {
     }
     try {
       String result = hederaService.submitMessage(form.topicId(), form.message());
+      model.addAttribute("resultKey", "message");
       model.addAttribute("result", result);
     } catch (Exception e) {
+      model.addAttribute("resultKey", "message");
       model.addAttribute("error", e.getMessage());
     }
     return "index";
@@ -225,6 +258,18 @@ public class HomeController {
 
   private void addAllFormAttributes(Model model) {
     addCommonAttributes(model);
+
+    // Operator 정보 추가
+    if (hederaService.hasOperator()) {
+      try {
+        AccountInfo operatorInfo = hederaService.getOperatorInfo();
+        model.addAttribute("operatorInfo", operatorInfo);
+        model.addAttribute("operatorAccountId", hederaService.getOperatorAccountId());
+      } catch (Exception e) {
+        // Operator 정보 조회 실패는 무시
+      }
+    }
+
     if (!model.containsAttribute("balanceForm")) {
       model.addAttribute("balanceForm", new BalanceForm(""));
     }
@@ -244,7 +289,7 @@ public class HomeController {
       model.addAttribute("nftMintForm", new NFTMintForm("", ""));
     }
     if (!model.containsAttribute("topicForm")) {
-      model.addAttribute("topicForm", new TopicForm(""));
+      model.addAttribute("topicForm", new TopicForm("", 7776000L));
     }
     if (!model.containsAttribute("messageForm")) {
       model.addAttribute("messageForm", new MessageForm("", ""));

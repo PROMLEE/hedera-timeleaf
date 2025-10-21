@@ -12,10 +12,40 @@
 /.classpath
 /.settings/
 /.vscode/
+*.code-workspace
 
 # OS
 .DS_Store
 Thumbs.db
 
-# Env
+# Environment variables (⚠️ Contains sensitive credentials)
 .env
+.env.local
+.env.*.local
+
+# Application properties with credentials (⚠️ NEVER commit these)
+application-local.yaml
+application-local.yml
+src/main/resources/application-local.yaml
+src/main/resources/application-local.yml
+
+# Windows scripts with credentials
+run-with-env.cmd
+run-with-env.ps1
+run.cmd
+run.ps1
+start-with-credentials.*
+
+# Credential files
+*-credentials.*
+*-account.*
+hedera-*.txt
+private-key.*
+keys/
+credentials/
+
+# Backup files
+*.bak
+*.backup
+*.tmp
+*~

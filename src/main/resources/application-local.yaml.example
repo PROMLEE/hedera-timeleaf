@@ -1,0 +1,31 @@
+# Local Development Configuration
+# 
+# ⚠️ SECURITY WARNING:
+# This file is for LOCAL DEVELOPMENT ONLY!
+# DO NOT commit this file to Git!
+# Add 'application-local.yaml' to .gitignore
+#
+# Usage:
+# 1. Copy this file to: src/main/resources/application-local.yaml
+# 2. Fill in your Hedera Testnet credentials below
+# 3. Run with: mvnw.cmd spring-boot:run -Dspring-boot.run.profiles=local
+#    Or set: SPRING_PROFILES_ACTIVE=local
+#
+# Get credentials from: https://portal.hedera.com
+
+app:
+  hedera:
+    # Replace with your Hedera Testnet Account ID
+    account-id: 0.0.YOUR_ACCOUNT_ID_HERE
+    
+    # Replace with your Hedera Private Key (DER encoded format)
+    # Example: 302e020100300506032b657004220420abcd1234...
+    private-key: YOUR_PRIVATE_KEY_HERE
+
+# Optional: Override other settings for local development
+# server:
+#   port: 8081
+
+# spring:
+#   thymeleaf:
+#     cache: false

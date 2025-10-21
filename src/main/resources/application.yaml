@@ -1,9 +1,18 @@
 server:
   port: 8080
+
 spring:
   thymeleaf:
     cache: false
+
 app:
   hedera:
     network: testnet
-    # 환경변수로 덮어쓰기 가능: HEDERA_ACCOUNT_ID / HEDERA_PRIVATE_KEY
+    # Operator credentials
+    # Option 1: Set via environment variables (recommended for production)
+    #   HEDERA_ACCOUNT_ID=0.0.xxxxx
+    #   HEDERA_PRIVATE_KEY=302e020100...
+    # Option 2: Set via application-local.yaml (for local development only)
+    # Option 3: Set here directly (⚠️ NOT recommended - security risk)
+    account-id: 0.0.7098019
+    private-key: 3030020100300706052b8104000a04220420d9197c6357b8b37d95517d2316989e6fe8c7607c38441d3615c07623c5fe927c

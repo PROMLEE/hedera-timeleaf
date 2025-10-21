@@ -4,7 +4,9 @@ import com.hedera.hashgraph.sdk.*;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.util.Collections;
+import java.util.Objects;
 import java.util.concurrent.TimeoutException;
 
 @Service
@@ -13,10 +15,11 @@ public class HederaService {
   @Value("${app.hedera.network:testnet}")
   private String network;
 
-  @Value("${HEDERA_ACCOUNT_ID:}")
+  // Priority: Environment variables > application-local.yaml > application.yaml
+  @Value("${HEDERA_ACCOUNT_ID:${app.hedera.account-id:}}")
   private String operatorIdEnv;
 
-  @Value("${HEDERA_PRIVATE_KEY:}")
+  @Value("${HEDERA_PRIVATE_KEY:${app.hedera.private-key:}}")
   private String operatorKeyEnv;
 
   public String getNetwork() {
@@ -26,6 +29,18 @@ public class HederaService {
   public boolean hasOperator() {
     return operatorIdEnv != null && !operatorIdEnv.isBlank()
         && operatorKeyEnv != null && !operatorKeyEnv.isBlank();
+  }
+
+  public String getOperatorAccountId() {
+    return hasOperator() ? operatorIdEnv : null;
+  }
+
+  public AccountInfo getOperatorInfo()
+      throws PrecheckStatusException, TimeoutException {
+    if (!hasOperator()) {
+      return null;
+    }
+    return getAccountInfo(operatorIdEnv);
   }
 
   // 1. 계정 잔액 조회
@@ -53,7 +68,7 @@ public class HederaService {
       throw new IllegalStateException("운영자 계정이 설정되지 않았습니다");
     }
     try (Client client = createClient()) {
-      AccountId sender = client.getOperatorAccountId();
+      AccountId sender = Objects.requireNonNull(client.getOperatorAccountId(), "Operator account is required");
       AccountId receiver = AccountId.fromString(toAccountId);
 
       TransactionResponse response = new TransferTransaction()
@@ -61,7 +76,7 @@ public class HederaService {
           .addHbarTransfer(receiver, Hbar.fromTinybars(amount))
           .execute(client);
 
-      TransactionReceipt receipt = response.getReceipt(client);
+      response.getReceipt(client);
       return "전송 완료! Transaction ID: " + response.transactionId;
     }
   }
@@ -96,14 +111,18 @@ public class HederaService {
       throw new IllegalStateException("운영자 계정이 설정되지 않았습니다");
     }
     try (Client client = createClient()) {
+      AccountId operatorAccountId = Objects.requireNonNull(client.getOperatorAccountId(),
+          "Operator account is required");
+      PublicKey operatorKey = Objects.requireNonNull(client.getOperatorPublicKey(), "Operator key is required");
+
       TransactionResponse response = new TokenCreateTransaction()
           .setTokenName(name)
           .setTokenSymbol(symbol)
           .setDecimals(decimals)
           .setInitialSupply(initialSupply)
-          .setTreasuryAccountId(client.getOperatorAccountId())
-          .setAdminKey(client.getOperatorPublicKey())
-          .setSupplyKey(client.getOperatorPublicKey())
+          .setTreasuryAccountId(operatorAccountId)
+          .setAdminKey(operatorKey)
+          .setSupplyKey(operatorKey)
           .execute(client);
 
       TransactionReceipt receipt = response.getReceipt(client);
@@ -121,16 +140,20 @@ public class HederaService {
       throw new IllegalStateException("운영자 계정이 설정되지 않았습니다");
     }
     try (Client client = createClient()) {
+      AccountId operatorAccountId = Objects.requireNonNull(client.getOperatorAccountId(),
+          "Operator account is required");
+      PublicKey operatorKey = Objects.requireNonNull(client.getOperatorPublicKey(), "Operator key is required");
+
       TransactionResponse response = new TokenCreateTransaction()
           .setTokenName(name)
           .setTokenSymbol(symbol)
           .setTokenType(TokenType.NON_FUNGIBLE_UNIQUE)
           .setDecimals(0)
           .setInitialSupply(0)
-          .setTreasuryAccountId(client.getOperatorAccountId())
+          .setTreasuryAccountId(operatorAccountId)
           .setSupplyType(TokenSupplyType.FINITE)
           .setMaxSupply(100)
-          .setSupplyKey(client.getOperatorPublicKey())
+          .setSupplyKey(operatorKey)
           .execute(client);
 
       TransactionReceipt receipt = response.getReceipt(client);
@@ -161,21 +184,24 @@ public class HederaService {
   }
 
   // 8. 토픽 생성 (HCS - Hedera Consensus Service)
-  public String createTopic(String memo)
+  public String createTopic(String memo, long autoRenewPeriodSeconds)
       throws PrecheckStatusException, TimeoutException, ReceiptStatusException {
     if (!hasOperator()) {
       throw new IllegalStateException("운영자 계정이 설정되지 않았습니다");
     }
     try (Client client = createClient()) {
+      long boundedAutoRenew = Math.min(Math.max(autoRenewPeriodSeconds, 1800L), 7_776_000L);
+
       TransactionResponse response = new TopicCreateTransaction()
           .setTopicMemo(memo)
+          .setAutoRenewPeriod(Duration.ofSeconds(boundedAutoRenew))
           .execute(client);
 
       TransactionReceipt receipt = response.getReceipt(client);
       TopicId topicId = receipt.topicId;
 
-      return String.format("토픽 생성 완료!%nTopic ID: %s%nMemo: %s",
-          topicId, memo);
+      return String.format("토픽 생성 완료!%nTopic ID: %s%nMemo: %s%nAuto Renew: %d초",
+          topicId, memo, boundedAutoRenew);
     }
   }
 
@@ -211,7 +237,8 @@ public class HederaService {
           .setKeys(client.getOperatorPublicKey())
           .execute(client);
 
-      FileId bytecodeFileId = fileResponse.getReceipt(client).fileId;
+      FileId bytecodeFileId = Objects.requireNonNull(fileResponse.getReceipt(client).fileId,
+          "Bytecode file ID is required");
 
       // 컨트랙트 생성
       TransactionResponse contractResponse = new ContractCreateTransaction()

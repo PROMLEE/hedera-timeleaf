@@ -106,6 +106,24 @@
         background: #9ca3af;
         cursor: not-allowed;
       }
+      .button-group {
+        display: flex;
+        gap: 8px;
+        align-items: stretch;
+      }
+      .button-group button[type="submit"] {
+        flex: 1;
+      }
+      .button-group .link-button {
+        background: #6b7280;
+        min-width: 48px;
+        max-width: 48px;
+        padding: 10px 8px;
+        font-size: 16px;
+      }
+      .button-group .link-button:hover {
+        background: #4b5563;
+      }
       .error {
         background: #fee2e2;
         color: #991b1b;
@@ -140,7 +158,166 @@
         padding-bottom: 0.5rem;
         border-bottom: 2px solid #e5e7eb;
       }
+      .hashscan-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        color: #2563eb;
+        text-decoration: none;
+        font-weight: 500;
+        transition: color 0.2s;
+      }
+      .hashscan-link:hover {
+        color: #1d4ed8;
+        text-decoration: underline;
+      }
+      .link-icon {
+        font-size: 12px;
+      }
     </style>
+    <script th:inline="javascript">
+      /*<![CDATA[*/
+      const network = /*[[${network}]]*/ "testnet";
+
+      function createHashscanLink(url, text) {
+        const link = document.createElement("a");
+        link.href = url;
+        link.target = "_blank";
+        link.className = "hashscan-link";
+        link.appendChild(document.createTextNode(`${text} `));
+        const icon = document.createElement("span");
+        icon.className = "link-icon";
+        icon.textContent = "🔗";
+        link.appendChild(icon);
+        return link;
+      }
+
+      function linkifyTextNode(node) {
+        const text = node.textContent;
+        if (!text || !/0\.0\.\d+/.test(text)) {
+          return;
+        }
+
+        const pattern =
+          /(Token ID:\s*)(0\.0\.\d+)|(Topic ID:\s*)(0\.0\.\d+)|(Account ID:\s*)(0\.0\.\d+)|(계정 ID:\s*)(0\.0\.\d+)|\b(0\.0\.\d+@\d+\.\d+)\b|\b(0\.0\.\d+)\b/g;
+
+        let match;
+        let lastIndex = 0;
+        const fragments = [];
+
+        while ((match = pattern.exec(text)) !== null) {
+          const matchStart = match.index;
+          const matchEnd = pattern.lastIndex;
+
+          if (matchStart > lastIndex) {
+            fragments.push(
+              document.createTextNode(text.slice(lastIndex, matchStart)),
+            );
+          }
+
+          let replacement = null;
+
+          if (match[1] && match[2]) {
+            fragments.push(document.createTextNode(match[1]));
+            replacement = createHashscanLink(
+              `https://hashscan.io/${network}/token/${match[2]}`,
+              match[2],
+            );
+          } else if (match[3] && match[4]) {
+            fragments.push(document.createTextNode(match[3]));
+            replacement = createHashscanLink(
+              `https://hashscan.io/${network}/topic/${match[4]}`,
+              match[4],
+            );
+          } else if (match[5] && match[6]) {
+            fragments.push(document.createTextNode(match[5]));
+            replacement = createHashscanLink(
+              `https://hashscan.io/${network}/account/${match[6]}`,
+              match[6],
+            );
+          } else if (match[7] && match[8]) {
+            fragments.push(document.createTextNode(match[7]));
+            replacement = createHashscanLink(
+              `https://hashscan.io/${network}/account/${match[8]}`,
+              match[8],
+            );
+          } else if (match[9]) {
+            replacement = createHashscanLink(
+              `https://hashscan.io/${network}/transaction/${match[9]}`,
+              match[9],
+            );
+          } else if (match[10]) {
+            replacement = createHashscanLink(
+              `https://hashscan.io/${network}/account/${match[10]}`,
+              match[10],
+            );
+          }
+
+          if (replacement) {
+            fragments.push(replacement);
+          }
+
+          lastIndex = matchEnd;
+        }
+
+        if (!fragments.length) {
+          return;
+        }
+
+        if (lastIndex < text.length) {
+          fragments.push(document.createTextNode(text.slice(lastIndex)));
+        }
+
+        const fragment = document.createDocumentFragment();
+        fragments.forEach((part) => fragment.appendChild(part));
+        node.parentNode.replaceChild(fragment, node);
+      }
+
+      function makeHashscanLinks() {
+        const resultElements = document.querySelectorAll(".result");
+
+        resultElements.forEach((resultElement) => {
+          if (resultElement.getAttribute("data-processed") === "true") {
+            return;
+          }
+
+          const walker = document.createTreeWalker(
+            resultElement,
+            NodeFilter.SHOW_TEXT,
+          );
+
+          const textNodes = [];
+          while (walker.nextNode()) {
+            const currentNode = walker.currentNode;
+            const parentElement = currentNode.parentElement;
+            if (
+              parentElement &&
+              (parentElement.closest("a") ||
+                !/0\.0\.\d+/.test(currentNode.textContent || ""))
+            ) {
+              continue;
+            }
+            textNodes.push(currentNode);
+          }
+
+          textNodes.forEach((node) => linkifyTextNode(node));
+
+          resultElement.setAttribute("data-processed", "true");
+        });
+      }
+
+      function openHashscan(type, id) {
+        if (!id || id.trim() === "") {
+          alert("ID를 입력해주세요.");
+          return;
+        }
+        const url = `https://hashscan.io/${network}/${type}/${id.trim()}`;
+        window.open(url, "_blank");
+      }
+
+      document.addEventListener("DOMContentLoaded", makeHashscanLinks);
+      /*]]>*/
+    </script>
   </head>
   <body>
     <div class="container">
@@ -157,20 +334,67 @@
         </div>
       </div>
 
+      <!-- Operator 정보 표시 -->
+      <div
+        th:if="${hasOperator && operatorInfo != null}"
+        class="card"
+        style="
+          margin-bottom: 1.5rem;
+          background: #f0fdf4;
+          border-color: #86efac;
+        "
+      >
+        <h2>👤 내 계정 정보</h2>
+        <div
+          style="
+            display: grid;
+            grid-template-columns: 150px 1fr;
+            gap: 0.5rem;
+            font-size: 14px;
+          "
+        >
+          <div style="font-weight: 500; color: #374151">Account ID:</div>
+          <div>
+            <a
+              th:href="@{'https://hashscan.io/' + ${network} + '/account/' + ${operatorAccountId}}"
+              target="_blank"
+              style="color: #2563eb; text-decoration: none"
+            >
+              <span th:text="${operatorAccountId}"></span>
+              <span style="font-size: 12px">🔗</span>
+            </a>
+          </div>
+
+          <div style="font-weight: 500; color: #374151">Balance:</div>
+          <div>
+            <span
+              th:text="${#numbers.formatDecimal(operatorInfo.balance.toTinybars() / 100000000.0, 1, 8)}"
+            ></span>
+            <span style="color: #6b7280"> ℏ</span>
+          </div>
+
+          <div style="font-weight: 500; color: #374151">Public Key:</div>
+          <div
+            style="
+              font-family: monospace;
+              font-size: 12px;
+              word-break: break-all;
+              color: #6b7280;
+            "
+          >
+            <span
+              th:text="${#strings.substring(operatorInfo.key.toString(), 0, 20) + '...' + #strings.substring(operatorInfo.key.toString(), operatorInfo.key.toString().length() - 10)}"
+            ></span>
+          </div>
+        </div>
+      </div>
+
       <div th:if="${!hasOperator}" class="info-box">
         <strong>⚠️ 운영자 계정이 설정되지 않았습니다</strong><br />
         환경변수 <code>HEDERA_ACCOUNT_ID</code>와
         <code>HEDERA_PRIVATE_KEY</code>를 설정하면 트랜잭션 기능(전송, 계정
         생성, 토큰 생성 등)을 사용할 수 있습니다. 현재는 조회(Query) 기능만 사용
         가능합니다.
-      </div>
-
-      <!-- 결과/에러 메시지 -->
-      <div th:if="${error}" class="card">
-        <div class="error" th:text="${error}"></div>
-      </div>
-      <div th:if="${result}" class="card">
-        <div class="result" th:text="${result}"></div>
       </div>
 
       <!-- 조회 기능 (Query) -->
@@ -184,9 +408,34 @@
             method="post"
           >
             <label>계정 ID</label>
-            <input type="text" th:field="*{accountId}" placeholder="0.0.1234" />
-            <button type="submit">잔액 조회</button>
+            <input
+              type="text"
+              th:field="*{accountId}"
+              placeholder="0.0.1234"
+              id="balanceAccountId"
+            />
+            <div class="button-group">
+              <button type="submit">잔액 조회</button>
+              <button
+                type="button"
+                class="link-button"
+                onclick="openHashscan('account', document.getElementById('balanceAccountId').value)"
+                title="Hashscan에서 보기"
+              >
+                🔗
+              </button>
+            </div>
           </form>
+          <div
+            th:if="${resultKey == 'balance' && error != null}"
+            class="error"
+            th:text="${error}"
+          ></div>
+          <div
+            th:if="${resultKey == 'balance' && result != null}"
+            class="result"
+            th:text="${result}"
+          ></div>
         </div>
 
         <div class="card">
@@ -198,9 +447,30 @@
               name="accountId"
               placeholder="0.0.1234"
               required
+              id="infoAccountId"
             />
-            <button type="submit">정보 조회</button>
+            <div class="button-group">
+              <button type="submit">정보 조회</button>
+              <button
+                type="button"
+                class="link-button"
+                onclick="openHashscan('account', document.getElementById('infoAccountId').value)"
+                title="Hashscan에서 보기"
+              >
+                🔗
+              </button>
+            </div>
           </form>
+          <div
+            th:if="${resultKey == 'info' && error != null}"
+            class="error"
+            th:text="${error}"
+          ></div>
+          <div
+            th:if="${resultKey == 'info' && result != null}"
+            class="result"
+            th:text="${result}"
+          ></div>
         </div>
       </div>
 
@@ -219,12 +489,34 @@
               type="text"
               th:field="*{toAccountId}"
               placeholder="0.0.1234"
+              id="transferAccountId"
             />
             <label>전송할 금액 (tinybars)</label>
             <input type="number" th:field="*{amount}" placeholder="100000000" />
             <small style="color: #6b7280">1 HBAR = 100,000,000 tinybars</small>
-            <button type="submit" th:disabled="${!hasOperator}">전송</button>
+            <div class="button-group">
+              <button type="submit" th:disabled="${!hasOperator}">전송</button>
+              <button
+                type="button"
+                class="link-button"
+                onclick="openHashscan('account', document.getElementById('transferAccountId').value)"
+                title="Hashscan에서 받는 계정 보기"
+                th:disabled="${!hasOperator}"
+              >
+                🔗
+              </button>
+            </div>
           </form>
+          <div
+            th:if="${resultKey == 'transfer' && error != null}"
+            class="error"
+            th:text="${error}"
+          ></div>
+          <div
+            th:if="${resultKey == 'transfer' && result != null}"
+            class="result"
+            th:text="${result}"
+          ></div>
         </div>
 
         <div class="card" th:classappend="${!hasOperator} ? 'disabled'">
@@ -247,6 +539,104 @@
               계정 생성
             </button>
           </form>
+          <div
+            th:if="${resultKey == 'account' && error != null}"
+            class="error"
+            th:text="${error}"
+          ></div>
+          <div
+            th:if="${resultKey == 'account' && result != null}"
+            class="result"
+            th:text="${result}"
+          ></div>
+        </div>
+      </div>
+
+      <!-- HCS (Hedera Consensus Service) -->
+      <div class="section-title">💬 HCS (Hedera Consensus Service)</div>
+      <div class="grid">
+        <div class="card" th:classappend="${!hasOperator} ? 'disabled'">
+          <h2>토픽 생성</h2>
+          <form
+            th:action="@{/create-topic}"
+            th:object="${topicForm}"
+            method="post"
+          >
+            <label>토픽 메모</label>
+            <input type="text" th:field="*{memo}" placeholder="My Topic" />
+            <label>자동 갱신 기간 (초)</label>
+            <input
+              type="number"
+              th:field="*{autoRenewPeriodSeconds}"
+              placeholder="7776000"
+              min="1800"
+              max="7776000"
+            />
+            <small style="color: #6b7280"
+              >30분(1,800초) 이상 · 90일(7,776,000초) 이하로 설정하세요.
+              기본값은 약 90일입니다.</small
+            >
+            <button type="submit" th:disabled="${!hasOperator}">
+              토픽 생성
+            </button>
+          </form>
+          <div
+            th:if="${resultKey == 'topic' && error != null}"
+            class="error"
+            th:text="${error}"
+          ></div>
+          <div
+            th:if="${resultKey == 'topic' && result != null}"
+            class="result"
+            th:text="${result}"
+          ></div>
+        </div>
+
+        <div class="card" th:classappend="${!hasOperator} ? 'disabled'">
+          <h2>메시지 전송</h2>
+          <form
+            th:action="@{/submit-message}"
+            th:object="${messageForm}"
+            method="post"
+          >
+            <label>토픽 ID</label>
+            <input
+              type="text"
+              th:field="*{topicId}"
+              placeholder="0.0.1234"
+              id="messageTopicId"
+            />
+            <label>메시지</label>
+            <input
+              type="text"
+              th:field="*{message}"
+              placeholder="Hello Hedera!"
+            />
+            <div class="button-group">
+              <button type="submit" th:disabled="${!hasOperator}">
+                메시지 전송
+              </button>
+              <button
+                type="button"
+                class="link-button"
+                onclick="openHashscan('topic', document.getElementById('messageTopicId').value)"
+                title="Hashscan에서 토픽 보기"
+                th:disabled="${!hasOperator}"
+              >
+                🔗
+              </button>
+            </div>
+          </form>
+          <div
+            th:if="${resultKey == 'message' && error != null}"
+            class="error"
+            th:text="${error}"
+          ></div>
+          <div
+            th:if="${resultKey == 'message' && result != null}"
+            class="result"
+            th:text="${result}"
+          ></div>
         </div>
       </div>
 
@@ -259,6 +649,7 @@
             th:action="@{/create-token}"
             th:object="${tokenForm}"
             method="post"
+            id="createTokenForm"
           >
             <label>토큰 이름</label>
             <input type="text" th:field="*{name}" placeholder="My Token" />
@@ -276,6 +667,16 @@
               토큰 생성
             </button>
           </form>
+          <div
+            th:if="${resultKey == 'token' && error != null}"
+            class="error"
+            th:text="${error}"
+          ></div>
+          <div
+            th:if="${resultKey == 'token' && result != null}"
+            class="result"
+            th:text="${result}"
+          ></div>
         </div>
       </div>
 
@@ -297,6 +698,16 @@
               NFT 컬렉션 생성
             </button>
           </form>
+          <div
+            th:if="${resultKey == 'nft' && error != null}"
+            class="error"
+            th:text="${error}"
+          ></div>
+          <div
+            th:if="${resultKey == 'nft' && result != null}"
+            class="result"
+            th:text="${result}"
+          ></div>
         </div>
 
         <div class="card" th:classappend="${!hasOperator} ? 'disabled'">
@@ -307,57 +718,43 @@
             method="post"
           >
             <label>토큰 ID</label>
-            <input type="text" th:field="*{tokenId}" placeholder="0.0.1234" />
+            <input
+              type="text"
+              th:field="*{tokenId}"
+              placeholder="0.0.1234"
+              id="nftTokenId"
+            />
             <label>메타데이터</label>
             <input
               type="text"
               th:field="*{metadata}"
               placeholder="ipfs://..."
             />
-            <button type="submit" th:disabled="${!hasOperator}">
-              NFT 민팅
-            </button>
+            <div class="button-group">
+              <button type="submit" th:disabled="${!hasOperator}">
+                NFT 민팅
+              </button>
+              <button
+                type="button"
+                class="link-button"
+                onclick="openHashscan('token', document.getElementById('nftTokenId').value)"
+                title="Hashscan에서 NFT 컬렉션 보기"
+                th:disabled="${!hasOperator}"
+              >
+                🔗
+              </button>
+            </div>
           </form>
-        </div>
-      </div>
-
-      <!-- HCS (Hedera Consensus Service) -->
-      <div class="section-title">💬 HCS (Hedera Consensus Service)</div>
-      <div class="grid">
-        <div class="card" th:classappend="${!hasOperator} ? 'disabled'">
-          <h2>토픽 생성</h2>
-          <form
-            th:action="@{/create-topic}"
-            th:object="${topicForm}"
-            method="post"
-          >
-            <label>토픽 메모</label>
-            <input type="text" th:field="*{memo}" placeholder="My Topic" />
-            <button type="submit" th:disabled="${!hasOperator}">
-              토픽 생성
-            </button>
-          </form>
-        </div>
-
-        <div class="card" th:classappend="${!hasOperator} ? 'disabled'">
-          <h2>메시지 전송</h2>
-          <form
-            th:action="@{/submit-message}"
-            th:object="${messageForm}"
-            method="post"
-          >
-            <label>토픽 ID</label>
-            <input type="text" th:field="*{topicId}" placeholder="0.0.1234" />
-            <label>메시지</label>
-            <input
-              type="text"
-              th:field="*{message}"
-              placeholder="Hello Hedera!"
-            />
-            <button type="submit" th:disabled="${!hasOperator}">
-              메시지 전송
-            </button>
-          </form>
+          <div
+            th:if="${resultKey == 'mint' && error != null}"
+            class="error"
+            th:text="${error}"
+          ></div>
+          <div
+            th:if="${resultKey == 'mint' && result != null}"
+            class="result"
+            th:text="${result}"
+          ></div>
         </div>
       </div>
 
