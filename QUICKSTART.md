@@ -143,7 +143,8 @@ Tomcat started on port 8080 (http)
 - 🎨 NFT 컬렉션 생성
 - 🖼️ NFT 민팅
 - 📢 HCS 토픽 생성
-- 💬 메시지 제출
+- � HCS 토픽 정보 조회
+- �💬 메시지 제출
 
 ---
 

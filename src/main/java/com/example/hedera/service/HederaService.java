@@ -4,9 +4,12 @@ import com.hedera.hashgraph.sdk.*;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.util.Collections;
-import java.util.Objects;
+import java.time.Instant;
+import java.util.*;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 @Service
@@ -221,6 +224,138 @@ public class HederaService {
 
       return String.format("메시지 전송 완료!%nSequence Number: %d",
           receipt.topicSequenceNumber);
+    }
+  }
+
+  public String getTopicInfo(String topicId)
+      throws PrecheckStatusException, TimeoutException {
+    try (Client client = createClient()) {
+      TopicId target = TopicId.fromString(topicId);
+      TopicInfo info = new TopicInfoQuery().setTopicId(target).execute(client);
+
+      String memo = info.topicMemo != null && !info.topicMemo.isBlank() ? info.topicMemo : "(없음)";
+      String autoRenewAccount = info.autoRenewAccountId != null ? info.autoRenewAccountId.toString() : "(없음)";
+      long autoRenewSeconds = info.autoRenewPeriod != null ? info.autoRenewPeriod.getSeconds() : 0;
+      String expiration = info.expirationTime != null ? info.expirationTime.toString() : "(알 수 없음)";
+
+      return String.format(
+          "토픽 정보:%nTopic ID: %s%nMemo: %s%nSequence Number: %d%nAuto Renew Account: %s%nAuto Renew Period: %d초%nExpiration Time: %s",
+          info.topicId,
+          memo,
+          info.sequenceNumber,
+          autoRenewAccount,
+          autoRenewSeconds,
+          expiration);
+    }
+  }
+
+  // 9.2. 토픽 메시지 조회
+  public String getTopicMessages(String topicId, int limit)
+      throws PrecheckStatusException, TimeoutException {
+    if (!hasOperator()) {
+      throw new IllegalStateException("운영자 계정이 설정되지 않았습니다");
+    }
+
+    try (Client client = createClient()) {
+      TopicId topic = TopicId.fromString(topicId);
+
+      // 메시지를 저장할 리스트
+      List<String> messages = new ArrayList<>();
+      CountDownLatch latch = new CountDownLatch(1);
+
+      // TopicMessageQuery 생성 - 처음부터 조회
+      TopicMessageQuery query = new TopicMessageQuery()
+          .setTopicId(topic)
+          .setStartTime(Instant.EPOCH) // 처음부터
+          .setLimit(limit);
+
+      // 메시지 수신 핸들러 설정
+      query.subscribe(client, (message) -> {
+        String messageContent = new String(message.contents, StandardCharsets.UTF_8);
+        String messageInfo = String.format(
+            "메시지 #%d (시간: %s): %s",
+            message.sequenceNumber,
+            message.consensusTimestamp,
+            messageContent);
+        messages.add(messageInfo);
+
+        // limit에 도달하면 latch 해제
+        if (messages.size() >= limit) {
+          latch.countDown();
+        }
+      });
+
+      // 5초 대기 후 구독 종료 (시간을 늘림)
+      try {
+        latch.await(5, TimeUnit.SECONDS);
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+      }
+
+      if (messages.isEmpty()) {
+        return String.format("토픽 %s에서 메시지를 찾을 수 없습니다. (토픽이 존재하지 않거나 메시지가 없을 수 있습니다)", topicId);
+      }
+
+      StringBuilder result = new StringBuilder();
+      result.append(String.format("토픽 %s 메시지 (%d개):\n\n", topicId, messages.size()));
+      for (String message : messages) {
+        result.append(message).append("\n");
+      }
+
+      return result.toString();
+    }
+  }
+
+  // 9.3. 트랜잭션 조회
+  public String getTransactionInfo(String transactionId)
+      throws PrecheckStatusException, TimeoutException {
+    if (!hasOperator()) {
+      throw new IllegalStateException("운영자 계정이 설정되지 않았습니다");
+    }
+
+    try (Client client = createClient()) {
+      TransactionId txId = TransactionId.fromString(transactionId);
+
+      // TransactionRecordQuery 사용
+      TransactionRecordQuery query = new TransactionRecordQuery()
+          .setTransactionId(txId);
+
+      TransactionRecord record = query.execute(client);
+
+      StringBuilder result = new StringBuilder();
+      result.append("트랜잭션 정보:\n\n");
+      result.append("Transaction ID: ").append(record.transactionId).append("\n");
+      result.append("Consensus Timestamp: ").append(record.consensusTimestamp).append("\n");
+      result.append("Status: ").append(record.receipt.status).append("\n");
+      result.append("Transaction Fee: ").append(record.transactionFee).append(" tinybars\n");
+
+      if (record.receipt.accountId != null) {
+        result.append("Created Account ID: ").append(record.receipt.accountId).append("\n");
+      }
+      if (record.receipt.tokenId != null) {
+        result.append("Created Token ID: ").append(record.receipt.tokenId).append("\n");
+      }
+      if (record.receipt.topicId != null) {
+        result.append("Created Topic ID: ").append(record.receipt.topicId).append("\n");
+      }
+      if (record.receipt.contractId != null) {
+        result.append("Created Contract ID: ").append(record.receipt.contractId).append("\n");
+      }
+      if (record.receipt.fileId != null) {
+        result.append("Created File ID: ").append(record.receipt.fileId).append("\n");
+      }
+      if (record.receipt.topicSequenceNumber != null && record.receipt.topicSequenceNumber > 0) {
+        result.append("Topic Sequence Number: ").append(record.receipt.topicSequenceNumber).append("\n");
+      }
+
+      if (record.transfers != null && !record.transfers.isEmpty()) {
+        result.append("\nTransfers:\n");
+        for (Transfer transfer : record.transfers) {
+          result.append("  ").append(transfer.accountId).append(": ").append(transfer.amount).append(" tinybars\n");
+        }
+      }
+
+      return result.toString();
     }
   }
 

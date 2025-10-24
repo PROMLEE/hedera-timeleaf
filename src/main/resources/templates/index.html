@@ -401,6 +401,41 @@
       <div class="section-title">📊 조회 기능 (Query)</div>
       <div class="grid">
         <div class="card">
+          <h2>트랜잭션 조회</h2>
+          <form th:action="@{/query-transaction}" method="post">
+            <label>트랜잭션 ID</label>
+            <input
+              type="text"
+              name="transactionId"
+              placeholder="0.0.123@1234567890.000000000"
+              id="transactionInfoId"
+              required
+            />
+            <div class="button-group">
+              <button type="submit">트랜잭션 조회</button>
+              <button
+                type="button"
+                class="link-button"
+                onclick="openHashscan('transaction', document.getElementById('transactionInfoId').value)"
+                title="Hashscan에서 트랜잭션 보기"
+              >
+                🔗
+              </button>
+            </div>
+          </form>
+          <div
+            th:if="${resultKey == 'transactionInfo' && error != null}"
+            class="error"
+            th:text="${error}"
+          ></div>
+          <div
+            th:if="${resultKey == 'transactionInfo' && result != null}"
+            class="result"
+            th:text="${result}"
+          ></div>
+        </div>
+
+        <div class="card">
           <h2>계정 잔액 조회</h2>
           <form
             th:action="@{/query-balance}"
@@ -555,6 +590,85 @@
       <!-- HCS (Hedera Consensus Service) -->
       <div class="section-title">💬 HCS (Hedera Consensus Service)</div>
       <div class="grid">
+        <div class="card">
+          <h2>토픽 정보 조회</h2>
+          <form th:action="@{/query-topic}" method="post">
+            <label>토픽 ID</label>
+            <input
+              type="text"
+              name="topicId"
+              placeholder="0.0.1234"
+              id="topicInfoId"
+              required
+            />
+            <div class="button-group">
+              <button type="submit">정보 조회</button>
+              <button
+                type="button"
+                class="link-button"
+                onclick="openHashscan('topic', document.getElementById('topicInfoId').value)"
+                title="Hashscan에서 토픽 보기"
+              >
+                🔗
+              </button>
+            </div>
+          </form>
+          <div
+            th:if="${resultKey == 'topicInfo' && error != null}"
+            class="error"
+            th:text="${error}"
+          ></div>
+          <div
+            th:if="${resultKey == 'topicInfo' && result != null}"
+            class="result"
+            th:text="${result}"
+          ></div>
+        </div>
+
+        <div class="card" th:classappend="${!hasOperator} ? 'disabled'">
+          <h2>토픽 메시지 조회</h2>
+          <form th:action="@{/query-topic-messages}" method="post">
+            <label>토픽 ID</label>
+            <input
+              type="text"
+              name="topicId"
+              placeholder="0.0.1234"
+              id="topicMessageId"
+              required
+            />
+            <label>조회할 메시지 수</label>
+            <input
+              type="number"
+              name="limit"
+              placeholder="10"
+              min="1"
+              max="100"
+              value="10"
+            />
+            <div class="button-group">
+              <button type="submit">메시지 조회</button>
+              <button
+                type="button"
+                class="link-button"
+                onclick="openHashscan('topic', document.getElementById('topicMessageId').value)"
+                title="Hashscan에서 토픽 보기"
+              >
+                🔗
+              </button>
+            </div>
+          </form>
+          <div
+            th:if="${resultKey == 'topicMessages' && error != null}"
+            class="error"
+            th:text="${error}"
+          ></div>
+          <div
+            th:if="${resultKey == 'topicMessages' && result != null}"
+            class="result"
+            th:text="${result}"
+          ></div>
+        </div>
+
         <div class="card" th:classappend="${!hasOperator} ? 'disabled'">
           <h2>토픽 생성</h2>
           <form

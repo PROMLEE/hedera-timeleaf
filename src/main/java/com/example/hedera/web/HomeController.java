@@ -52,9 +52,18 @@ public class HomeController {
       @Min(value = 1800, message = "자동 갱신 기간은 최소 1800초 (30분) 이상이어야 합니다") @Max(value = 7776000, message = "자동 갱신 기간은 최대 7,776,000초 (90일) 이하로 설정해야 합니다") long autoRenewPeriodSeconds) {
   }
 
+  record TopicInfoForm(String topicId) {
+  }
+
+  record TopicMessageForm(String topicId, int limit) {
+  }
+
   record MessageForm(
       @NotBlank(message = "토픽 ID를 입력하세요") String topicId,
       @NotBlank(message = "메시지를 입력하세요") String message) {
+  }
+
+  record TransactionInfoForm(String transactionId) {
   }
 
   private final HederaService hederaService;
@@ -73,7 +82,10 @@ public class HomeController {
     model.addAttribute("nftForm", new NFTForm("", ""));
     model.addAttribute("nftMintForm", new NFTMintForm("", ""));
     model.addAttribute("topicForm", new TopicForm("", 7776000L));
+    model.addAttribute("topicInfoForm", new TopicInfoForm(""));
+    model.addAttribute("topicMessageForm", new TopicMessageForm("", 10));
     model.addAttribute("messageForm", new MessageForm("", ""));
+    model.addAttribute("transactionInfoForm", new TransactionInfoForm(""));
 
     // Operator 정보 추가
     if (hederaService.hasOperator()) {
@@ -233,6 +245,32 @@ public class HomeController {
     return "index";
   }
 
+  @PostMapping("/query-topic")
+  public String queryTopic(@RequestParam("topicId") String topicId, Model model) {
+    System.out.println("DEBUG: query-topic called with topicId: '" + topicId + "'");
+    addAllFormAttributes(model);
+
+    // 빈 값 체크를 직접 처리
+    if (topicId == null || topicId.trim().isEmpty()) {
+      model.addAttribute("resultKey", "topicInfo");
+      model.addAttribute("error", "토픽 ID를 입력하세요");
+      return "index";
+    }
+
+    try {
+      String result = hederaService.getTopicInfo(topicId.trim());
+      System.out.println("DEBUG: Topic info result: " + result);
+      model.addAttribute("resultKey", "topicInfo");
+      model.addAttribute("result", result);
+    } catch (Exception e) {
+      System.out.println("DEBUG: Exception in topic query: " + e.getMessage());
+      e.printStackTrace();
+      model.addAttribute("resultKey", "topicInfo");
+      model.addAttribute("error", e.getMessage());
+    }
+    return "index";
+  }
+
   @PostMapping("/submit-message")
   public String submitMessage(@ModelAttribute("messageForm") @Valid MessageForm form,
       BindingResult bindingResult, Model model) {
@@ -249,6 +287,77 @@ public class HomeController {
       model.addAttribute("error", e.getMessage());
     }
     return "index";
+  }
+
+  @PostMapping("/query-topic-messages")
+  public String queryTopicMessages(@RequestParam("topicId") String topicId,
+      @RequestParam("limit") int limit,
+      Model model) {
+    addAllFormAttributes(model);
+    System.out.println("DEBUG: query-topic-messages called with topicId: '" + topicId + "', limit: " + limit);
+
+    if (topicId == null || topicId.trim().isEmpty()) {
+      model.addAttribute("resultKey", "topicMessages");
+      model.addAttribute("error", "토픽 ID를 입력하세요");
+      return "index";
+    }
+
+    if (limit <= 0) {
+      limit = 10; // 기본값
+    }
+
+    try {
+      String result = hederaService.getTopicMessages(topicId.trim(), limit);
+      System.out.println("DEBUG: Topic messages result: " + result);
+      model.addAttribute("resultKey", "topicMessages");
+      model.addAttribute("result", result);
+    } catch (Exception e) {
+      System.out.println("DEBUG: Exception in topic messages query: " + e.getMessage());
+      e.printStackTrace();
+      model.addAttribute("resultKey", "topicMessages");
+      model.addAttribute("error", e.getMessage());
+    }
+    return "index";
+  }
+
+  @ModelAttribute("topicInfoForm")
+  public TopicInfoForm topicInfoForm() {
+    return new TopicInfoForm("");
+  }
+
+  @ModelAttribute("topicMessageForm")
+  public TopicMessageForm topicMessageForm() {
+    return new TopicMessageForm("", 10);
+  }
+
+  @PostMapping("/query-transaction")
+  public String queryTransaction(@RequestParam("transactionId") String transactionId, Model model) {
+    addAllFormAttributes(model);
+    System.out.println("DEBUG: query-transaction called with transactionId: '" + transactionId + "'");
+
+    if (transactionId == null || transactionId.trim().isEmpty()) {
+      model.addAttribute("resultKey", "transactionInfo");
+      model.addAttribute("error", "트랜잭션 ID를 입력하세요");
+      return "index";
+    }
+
+    try {
+      String result = hederaService.getTransactionInfo(transactionId.trim());
+      System.out.println("DEBUG: Transaction info result: " + result);
+      model.addAttribute("resultKey", "transactionInfo");
+      model.addAttribute("result", result);
+    } catch (Exception e) {
+      System.out.println("DEBUG: Exception in transaction query: " + e.getMessage());
+      e.printStackTrace();
+      model.addAttribute("resultKey", "transactionInfo");
+      model.addAttribute("error", e.getMessage());
+    }
+    return "index";
+  }
+
+  @ModelAttribute("transactionInfoForm")
+  public TransactionInfoForm transactionInfoForm() {
+    return new TransactionInfoForm("");
   }
 
   private void addCommonAttributes(Model model) {
@@ -290,6 +399,9 @@ public class HomeController {
     }
     if (!model.containsAttribute("topicForm")) {
       model.addAttribute("topicForm", new TopicForm("", 7776000L));
+    }
+    if (!model.containsAttribute("topicInfoForm")) {
+      model.addAttribute("topicInfoForm", new TopicInfoForm(""));
     }
     if (!model.containsAttribute("messageForm")) {
       model.addAttribute("messageForm", new MessageForm("", ""));
